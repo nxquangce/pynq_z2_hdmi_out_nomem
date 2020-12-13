@@ -1,0 +1,8 @@
+pynq_z2_hdmi**
+xsim.dir/
+*.pb
+*.jou
+*.log
+*.backup.jou
+*.backup.log
+*.upgrade_log
