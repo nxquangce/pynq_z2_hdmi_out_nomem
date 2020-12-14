@@ -100,7 +100,7 @@ if { $::argc > 0 } {
 }
 
 # Set the directory path for the original project from where this script was exported
-set orig_proj_dir "[file normalize "$origin_dir/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem"]"
+set orig_proj_dir "[file normalize "$origin_dir"]"
 
 # Create project
 create_project ${_xil_proj_name_} $origin_dir/${_xil_proj_name_} -part xc7z020clg400-1
@@ -146,7 +146,7 @@ if {[string equal [get_filesets -quiet sources_1] ""]} {
 
 # Set IP repository paths
 set obj [get_filesets sources_1]
-set_property "ip_repo_paths" "[file normalize "$origin_dir/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/ip/rgb2dvi_v1_2"]" $obj
+set_property "ip_repo_paths" "[file normalize "$origin_dir/ip/rgb2dvi_v1_2"]" $obj
 
 # Rebuild user ip_repo's index before adding any source files
 update_ip_catalog -rebuild
@@ -155,10 +155,9 @@ update_ip_catalog -rebuild
 set obj [get_filesets sources_1]
 # Import local files from the original project
 set files [list \
- [file normalize "${origin_dir}/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/src/address_generator.v" ]\
- [file normalize "${origin_dir}/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/pynq_z2_hdmi_out_nomem.srcs/sources_1/bd/video_out_pynq_z2/hdl/video_out_pynq_z2_wrapper.v" ]\
- [file normalize "${origin_dir}/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/src/video_pattern_generator.v" ]\
- [file normalize "${origin_dir}/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/src/top.v" ]\
+ [file normalize "${origin_dir}/src/address_generator.v" ]\
+ [file normalize "${origin_dir}/src/video_pattern_generator.v" ]\
+ [file normalize "${origin_dir}/src/top.v" ]\
 ]
 set imported_files [import_files -fileset sources_1 $files]
 
@@ -181,9 +180,9 @@ if {[string equal [get_filesets -quiet constrs_1] ""]} {
 set obj [get_filesets constrs_1]
 
 # Add/Import constrs file and set constrs file properties
-set file "[file normalize ${origin_dir}/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/pynq_z2_hdmi_out_nomem.srcs/constrs_1/imports/constr/pynq-z2_v1.0.xdc]"
+set file "[file normalize ${origin_dir}/constrs/pynq-z2_v1.0.xdc]"
 set file_imported [import_files -fileset constrs_1 [list $file]]
-set file "constr/pynq-z2_v1.0.xdc"
+set file "constrs/pynq-z2_v1.0.xdc"
 set file_obj [get_files -of_objects [get_filesets constrs_1] [list "*$file"]]
 set_property -name "file_type" -value "XDC" -objects $file_obj
 
@@ -205,12 +204,10 @@ set obj [get_filesets sim_1]
 set_property -name "top" -value "top" -objects $obj
 set_property -name "top_lib" -value "xil_defaultlib" -objects $obj
 
-
-# Adding sources referenced in BDs, if not already added
-if { [get_files address_generator.v] == "" } {
-  import_files -quiet -fileset sources_1 /media/nxqce/DATA/hard-workspace/pynq-z2-hdmi-out-nomem/proj/pynq_z2_hdmi_out_nomem/src/address_generator.v
-}
-
+# Prepare info
+set bd_name video_out_pynq_z2
+set design_name $bd_name
+set proj_name $_xil_proj_name_
 
 # Proc to create BD video_out_pynq_z2
 proc cr_bd_video_out_pynq_z2 { parentCell } {
@@ -221,7 +218,8 @@ proc cr_bd_video_out_pynq_z2 { parentCell } {
 
 
   # CHANGE DESIGN NAME HERE
-  set design_name video_out_pynq_z2
+  variable design_name
+  variable proj_name
 
   common::send_msg_id "BD_TCL-003" "INFO" "Currently there is no design <$design_name> in project, so creating one..."
 
@@ -282,7 +280,7 @@ proc cr_bd_video_out_pynq_z2 { parentCell } {
       common::send_msg_id "BD_TCL-008" "INFO" "Please add source files for the missing module(s) above."
       set bCheckIPsPassed 0
    }
-}
+  }
 
   if { $bCheckIPsPassed != 1 } {
     common::send_msg_id "BD_TCL-1003" "WARNING" "Will not continue with creation of design due to the error(s) above."
@@ -1206,8 +1204,23 @@ proc cr_bd_video_out_pynq_z2 { parentCell } {
   current_bd_instance $oldCurInst
 
   save_bd_design
-  close_bd_design $design_name 
+
+  regenerate_bd_layout
+  #validate_bd_design
+  save_bd_design
+
+  #Generate the wrapper
+  make_wrapper -files [get_files $design_name.bd] -top
+
+  # Add the wrapper to the fileset
+  set obj [get_filesets sources_1]
+  set files [list "[file normalize [glob "./$proj_name/$proj_name.srcs/sources_1/bd/${design_name}/hdl/${design_name}_wrapper.v"]]"]
+  add_files -norecurse -fileset $obj $files
+  
+  close_bd_design $design_name
+
 }
+
 # End of cr_bd_video_out_pynq_z2()
 cr_bd_video_out_pynq_z2 ""
 set_property IS_MANAGED "0" [get_files video_out_pynq_z2.bd ] 
